@@ -26,11 +26,22 @@ def main():
     install_folder = "install"
     os.chdir(install_folder)
 
+    if system == "Windows":
+        vcpkg_root = os.environ.get("VCPKG_ROOT", r"C:\vcpkg")
+        dll_paths = [
+            os.path.join(vcpkg_root, "installed", "x64-windows", "debug", "bin"),
+            os.path.join(vcpkg_root, "installed", "x64-windows", "bin"),
+        ]
+        existing = [p for p in dll_paths if os.path.isdir(p)]
+        if existing:
+            os.environ["PATH"] = os.pathsep.join(existing + [os.environ.get("PATH", "")])
+
     if (options.rpi):
         check_run_cmd('tvservice', ['-e', 'DMT 16']) # change to 1024x768
         time.sleep(1) # need a little bit of time for graphics to be stable
 
-    game_path = os.path.join(".", "game")
+    game_name = "game.exe" if system == "Windows" else "game"
+    game_path = os.path.join(".", game_name)
     check_run_cmd(game_path)
 
     if (options.rpi):

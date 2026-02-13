@@ -7,6 +7,10 @@ import os
 from cmd_helpers import *
 
 def parse_args():
+    default_generator = "Unix Makefiles"
+    if platform.system() == "Windows":
+        default_generator = "Visual Studio 17 2022"
+
     parser = argparse.ArgumentParser()
     parser.add_argument("buildtype",   default="Debug",
                         help="build type", choices=["Debug", "Release"], nargs="?")
@@ -18,8 +22,8 @@ def parse_args():
                         help="disable parallel build", dest="single", action="store_true")
     parser.add_argument("--cross",     default="",
                         help="cross build target", choices=["", "armv7l"])
-    parser.add_argument("--generator", default="Unix Makefiles",
-                        help="cmake generator", choices=["Unix Makefiles", "Xcode"])
+    parser.add_argument("--generator", default=default_generator,
+                        help="cmake generator")
     parser.add_argument("--install", default=False,
                         help="Install")
 
@@ -42,7 +46,8 @@ def main():
 
     print_header("Start CMake configuration")
     build_dir = "build/%s.%s.%s" % (system, machine, options.buildtype)
-    check_run_cmd("mkdir", ["-p", build_dir])
+    if not path_exists(build_dir):
+        os.makedirs(build_dir)
     os.chdir(build_dir)
 
     cmake_config = ["-G",
@@ -50,35 +55,49 @@ def main():
                     "../" * (build_dir.count("/") + 1),
                     "-DCMAKE_BUILD_TYPE=" + options.buildtype,
                     "-DCMAKE_INSTALL_PREFIX=./",
-                    "-DCMAKE_EXPORT_COMPILE_COMMANDS=1"]
+                    "-DCMAKE_EXPORT_COMPILE_COMMANDS=1",
+                    "-DBUILD_TESTING=OFF"]
+
+    if system == "Windows" and options.generator.startswith("Visual Studio"):
+        cmake_config += ["-A", "x64", "-DVCPKG_TARGET_TRIPLET=x64-windows"]
 
     if options.cross == "armv7l":
         if os.environ.get("ROOTFS_ARM") is None:
             os.environ["ROOTFS_ARM"] = os.path.join(home_folder, "cross/rootfs/armv7l")
         toolchain = os.path.join(home_folder, "cmake/toolchain-armv7l.cmake")
         cmake_config += ["-DCMAKE_TOOLCHAIN_FILE=" + toolchain]
+    elif system == "Windows":
+        vcpkg_root = os.environ.get("VCPKG_ROOT")
+        if vcpkg_root:
+            vcpkg_toolchain = os.path.join(vcpkg_root, "scripts", "buildsystems", "vcpkg.cmake")
+            if path_exists(vcpkg_toolchain):
+                cmake_config += ["-DCMAKE_TOOLCHAIN_FILE=" + vcpkg_toolchain]
 
     check_run_cmd("cmake", cmake_config)
 
-    if options.generator != "Unix Makefiles":
-        return
-
-    # From here, support `Makefile` project only
-    make_args = []
-
-    if options.clean:
-        print_header("Clean build directory")
-        check_run_cmd("make", ["clean"])
-
-    if not options.single:
-        jobs = "-j" + str(cpu_count * 2)
-        make_args.append(jobs)
-
     print_header("Start build")
     start_time = time.time()
-    check_run_cmd("make", make_args)
+
+    if options.generator == "Unix Makefiles":
+        make_args = []
+        if options.clean:
+            print_header("Clean build directory")
+            check_run_cmd("make", ["clean"])
+        if not options.single:
+            jobs = "-j" + str(cpu_count * 2)
+            make_args.append(jobs)
+        check_run_cmd("make", make_args)
+    else:
+        build_args = ["--build", ".", "--config", options.buildtype]
+        if not options.single:
+            build_args += ["--parallel", str(cpu_count * 2)]
+        check_run_cmd("cmake", build_args)
+
     elapsed_time = time.time() - start_time
-    print("Build Time is %d:%02d.%02d" % (elapsed_time // 60, elapsed_time % 60, (elapsed_time * 100) % 100))
+    mins = int(elapsed_time // 60)
+    secs = int(elapsed_time % 60)
+    centis = int((elapsed_time * 100) % 100)
+    print("Build Time is %d:%02d.%02d" % (mins, secs, centis))
 
     # Install font
     res_path = os.path.join("game", "res")
@@ -94,7 +113,10 @@ def main():
         download_file(font_url, font_filepath)
 
     # Run install
-    check_run_cmd("make", ["install"])
+    if options.generator == "Unix Makefiles":
+        check_run_cmd("make", ["install"])
+    else:
+        check_run_cmd("cmake", ["--install", ".", "--config", options.buildtype])
 
     # Copy font to install folder
     res_ipath = os.path.join(install_folder, "res")

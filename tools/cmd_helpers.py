@@ -2,8 +2,8 @@ import os
 import sys
 import subprocess
 import platform
-import urllib2
 import shutil
+from urllib import request, error
 
 def wrap_gen(color):
     return lambda s: color + s + "\033[0m"
@@ -45,16 +45,16 @@ def run_cmd_capture(cmd, args = []):
 
 def download_file(url, filename):
     try:
-        f = urllib2.urlopen(url)
+        f = request.urlopen(url)
         print_header("Downloading " + url)
 
         # Open our local file for writing
         with open(filename, "wb") as local:
             local.write(f.read())
-    except urllib2.HTTPError, e:
-        print "HTTP Error:", e.code, url
-    except urllib2.URLError, e:
-        print "URL Error:", e.reason, url
+    except error.HTTPError as e:
+        print("HTTP Error:", e.code, url)
+    except error.URLError as e:
+        print("URL Error:", e.reason, url)
 
 def path_exists(path):
     try:

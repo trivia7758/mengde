@@ -1,12 +1,14 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.5)
 project(MENGDE CXX)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${MENGDE_SOURCE_DIR}/cmake")
 
 include(CTest)
-include(BoostTestHelpers)
 include(BuildSol2)
 include(FetchFlatbuffers)
+if(BUILD_TESTING)
+    include(BoostTestHelpers)
+endif()
 
 # Set an output directory for our binaries
 set(BIN_DIR ${MENGDE_SOURCE_DIR}/bin)
@@ -18,11 +20,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Also set debug/optimization flags depending on the build type. IDE users choose this when
 # selecting the build mode in their IDE
 
-if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL "AppleClang" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -pedantic")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} -g -DDEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} -O2")
-elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "MSVC")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
         string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
     else()
@@ -41,7 +43,13 @@ endif()
 if(BUILD_NATIVE)
     enable_testing()
 
-    find_package(Boost 1.55.0 COMPONENTS filesystem system REQUIRED)
+    find_package(Boost 1.55.0 CONFIG QUIET COMPONENTS filesystem system format)
+    if(NOT Boost_FOUND)
+        if(POLICY CMP0167)
+            cmake_policy(SET CMP0167 OLD)
+        endif()
+        find_package(Boost 1.55.0 REQUIRED COMPONENTS filesystem system format)
+    endif()
     find_package(SDL2 REQUIRED)
     find_package(SDL2_ttf REQUIRED)
     find_package(Lua REQUIRED)
@@ -51,7 +59,9 @@ else()
     endif()
 endif()
 
-include_directories(${Boost_INCLUDE_DIR})
+if(Boost_INCLUDE_DIRS)
+    include_directories(${Boost_INCLUDE_DIRS})
+endif()
 
 # Look in the game subdirectory to find its CMakeLists.txt so we can build the executable
 add_subdirectory(game)

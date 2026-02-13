@@ -50,7 +50,7 @@ void Texture::InitBitmap(Renderer* renderer, const std::string& path, bool use_k
   surface_ = SDL_LoadBMP(path.c_str());
   if (surface_ == nullptr) {
     string msg = Misc::GetErrorMessage();
-    LOG_FATAL("Unable to load image! : %s", msg.c_str());
+    LOG_WARNING("Unable to load image '%s': %s", path.c_str(), msg.c_str());
     texture_ = nullptr;
     return;
   }
